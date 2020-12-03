@@ -6,6 +6,7 @@ module Lib
   , readPolicy
   , readAttempt
   , readAttempts
+  , oldIsCorrect
   , isCorrect
   ) where
 
@@ -31,19 +32,34 @@ data Attempt = Attempt
   , attemptPwd :: Text
   }
 
+oldIsCorrect :: Attempt -> Bool
+oldIsCorrect att =
+  let policy = attemptPol att
+      min = policyMin policy
+      max = policyMax policy
+      char = policyChar policy
+      pwd = attemptPwd att
+      isCorrect pwd k = case Text.uncons pwd of
+        Just (c, pwd') 
+          | c == char -> k < max && isCorrect pwd' (k + 1)
+          | c /= char -> isCorrect pwd' k
+        Nothing -> k >= min
+  in isCorrect pwd 0
+
 isCorrect :: Attempt -> Bool
 isCorrect att =
   let policy = attemptPol att
-      max = policyMax policy
-      min = policyMin policy
+      first = policyMin policy
+      second = policyMax policy
+      low = min first second - 1
+      high = max first second - 1
       char = policyChar policy
       pwd = attemptPwd att
-      isCorrect' pwd k = case Text.uncons pwd of
-        Just (c, pwd') 
-          | c == char -> k < max && isCorrect' pwd' (k + 1)
-          | c /= char -> isCorrect' pwd' k
-        Nothing -> k >= min
-  in isCorrect' pwd 0
+      (_, pwd') = Text.splitAt (toEnum low) pwd
+      highIdx = toEnum (high - low)
+      lowCount = fromEnum (Text.head pwd' == char)
+      highCount = fromEnum (Text.index pwd' highIdx == char)
+  in lowCount + highCount == 1
 
 readAttempts :: IO [Attempt]
 readAttempts = do
